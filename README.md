@@ -141,7 +141,8 @@ npm test
 
 1. **SMTP-Anbieter wählen** (Optionen unten) und dort ein eigenes Versandkonto oder eine eigene Absenderadresse anlegen, nicht das Hauptpostfach. AVV mit dem Anbieter abschließen und Nachweis ablegen.
 2. **Vercel-Projekt anlegen**, im Team „MichiConsulting's projects“ (Pro), aus diesem Ordner. Dafür braucht das Repo ein Remote oder einen Upload per CLI. Beides ist Michis Entscheidung, bewusst nicht vorbereitet.
-3. **Region prüfen**: nach dem ersten Deploy in den Projekteinstellungen unter Functions nachsehen, dass `fra1` aktiv ist. `vercel.json` setzt es, aber das Dashboard ist die Bestätigung.
+3. **Region prüfen**: nach dem ersten Deploy in den Projekteinstellungen unter Functions nachsehen, dass `fra1` aktiv ist. `vercel.json` setzt es, aber das Dashboard ist die Bestätigung. Dabei auch prüfen, dass keine Ausweichregion (Function Failover Regions) außerhalb der EU eingestellt ist.
+   Beim ersten Deploy außerdem bestätigen, dass `kunden.json` per `includeFiles` in der Funktion landet und der Export `export default { fetch }` greift: eine Probeanfrage mit unbekannter Formular-ID muss 404 liefern, nicht 500.
 4. **Umgebungsvariablen** eintragen, nur für Production.
 5. **Domain** für den Endpunkt festlegen, z. B. eine Subdomain von dekaru.de. Dann steht in den Formularen der Kunden keine `vercel.app`-Adresse.
 6. **Probeanfrage** an ein eigenes Postfach, bevor der erste Kunde umgestellt wird.
@@ -154,15 +155,15 @@ Keine Entscheidung, nur die Lage. Alle Angaben abgerufen am 29.09.2026. Nichts d
 ### 1. Google Workspace (bestehendes Mailkonto von dekaru.de)
 
 - **Warum naheliegend:** Die MX-Einträge von dekaru.de zeigen auf Google (`dig MX dekaru.de` liefert `smtp.google.com`, geprüft am 29.09.2026). Es gäbe also kein neues Konto.
-- **Zugang:** Nur `smtp.gmail.com`, Port 465 oder 587, mit App-Passwort passt. Der empfohlene `smtp-relay.gmail.com` authentifiziert über feste IP-Adressen, Vercel-Funktionen haben keine. `smtp.gmail.com` unterstützt laut Google dynamische IP-Adressen, Grenze 2.000 Nachrichten am Tag. Fundstelle: knowledge.workspace.google.com/admin/gmail/send-email-from-a-printer-scanner-or-app.
+- **Zugang:** Passend ist `smtp.gmail.com`, Port 465 oder 587, mit vollständiger Workspace-Adresse und App-Passwort. Google nennt dafür ausdrücklich „Dynamic IP addresses“ und „The sending limit is 2,000 messages per day“. Der empfohlene `smtp-relay.gmail.com` „authenticates messages with IP addresses“, bei dynamischen Adressen „authentication might require a static IP address“, und feste Adressen haben Vercel-Funktionen nicht. Fundstelle: knowledge.workspace.google.com/admin/gmail/send-email-from-a-printer-scanner-or-app, Wortlaut geprüft.
 - **AVV:** Das Cloud Data Processing Addendum „is incorporated into the Agreement(s)“, gilt ausdrücklich auch für Google Workspace, Stand „Last modified June 8, 2026“. Drittlandübermittlung über Standardvertragsklauseln, die dort definiert sind. Fundstelle: cloud.google.com/terms/data-processing-addendum. Vertragspartner und Anschrift stehen nicht im Addendum, **im eigenen Workspace-Vertrag prüfen**.
-- **Haken, wichtig:** Laut Google werden über SMTP gesendete Mails automatisch in den Ordner „Gesendet“ des Kontos kopiert (support.google.com/mail/answer/78892). Damit läge **jede Anfrage in Kopie bei dekaru**, was gegen „keine Kopie an dekaru“ und „nichts gespeichert“ verstößt. Ginge nur mit einem eigenen Versandkonto, dessen Gesendet-Ordner regelmäßig automatisch geleert wird, und das ist erst noch zu belegen. Dazu ist Google ein US-Konzern, auch wenn der Vertrag über eine EU-Gesellschaft läuft.
+- **Haken, wichtig:** Google schreibt: „Sent messages are automatically copied to the Gmail/Sent folder if your email client uses SMTP.“ (support.google.com/mail/answer/78892, Wortlaut geprüft). Damit läge **jede Anfrage in Kopie bei dekaru**, was gegen „keine Kopie an dekaru“ und „nichts gespeichert“ verstößt. Ginge nur mit einem eigenen Versandkonto, dessen Gesendet-Ordner regelmäßig automatisch geleert wird, und das ist erst noch zu belegen. Dazu ist Google ein US-Konzern, auch wenn der Vertrag über eine EU-Gesellschaft läuft.
 
 ### 2. mailbox.org
 
-- **Firma:** Heinlein Hosting GmbH, Schwedter Straße 8/9A, 10119 Berlin, Amtsgericht Berlin-Charlottenburg HRB 220010 B. Fundstelle: mailbox.org/de/impressum.
-- **Serverstandort:** „an zwei verschiedenen Berliner Standorten“. Fundstelle: kb.mailbox.org/de/privat/faq/wo-stehen-die-server-von-mailbox.
-- **AVV:** Geschäftskunden können einen AV-Vertrag abschließen, laut Knowledge Base (kb.mailbox.org/de/business/faq/mailbox-fuer-geschaeftskunden) und der Pressemitteilung vom 23.05.2018 online „mit wenigen Mausklicks“ (mailbox.org/de/presse/dsgvo-auskunftsportal). Für welche Tarife genau und was er zur Aufbewahrung sagt: **nicht geprüft**.
+- **Firma:** Heinlein Hosting GmbH, Schwedter Straße 8/9A, 10119 Berlin, Amtsgericht Berlin-Charlottenburg HRB 220010 B. Fundstelle: mailbox.org/de/impressum, Wortlaut geprüft.
+- **Serverstandort:** „an zwei verschiedenen Berliner Standorten“. Fundstelle: kb.mailbox.org/de/privat/faq/wo-stehen-die-server-von-mailbox, Wortlaut geprüft.
+- **AVV:** Geschäftskunden können einen AV-Vertrag abschließen, laut Knowledge Base (kb.mailbox.org/de/business/faq/mailbox-fuer-geschaeftskunden) und der Pressemitteilung vom 23.05.2018 online „mit wenigen Mausklicks“ (mailbox.org/de/presse/dsgvo-auskunftsportal). Beide Aussagen nur aus Suchergebnis und Zusammenfassung, nicht im Wortlaut geprüft. Für welche Tarife genau und was er zur Aufbewahrung sagt: **nicht geprüft**.
 - **SMTP-Server und Port: nicht aus einer Primärquelle geprüft.** Vor der Wahl in der Knowledge Base nachsehen.
 - **Offene Frage wie bei Google:** Ob über SMTP gesendete Mails automatisch im Gesendet-Ordner landen. Bei klassischen Postfächern legt meist das Mailprogramm die Kopie per IMAP ab, nicht der Server. Das wäre günstig, ist aber **nicht belegt**.
 - Vorteil: deutscher Anbieter, Verarbeitung in Deutschland, keine Drittlandfrage im Eintrag.
