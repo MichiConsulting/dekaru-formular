@@ -1,0 +1,12 @@
+{
+  "beispiel-tischlerei": {
+    "name": "Tischlerei Beispiel (fiktiv)",
+    "empfaenger": "anfragen@tischlerei-beispiel.example",
+    "origins": [
+      "https://tischlerei-beispiel.example",
+      "https://www.tischlerei-beispiel.example"
+    ],
+    "betreffPraefix": "[Terminanfrage]",
+    "dankeUrl": "https://tischlerei-beispiel.example/danke"
+  }
+}

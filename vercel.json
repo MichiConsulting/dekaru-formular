@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["fra1"],
+  "functions": {
+    "api/anfrage.mjs": {
+      "maxDuration": 15,
+      "memory": 256,
+      "includeFiles": "kunden.json"
+    }
+  }
+}
