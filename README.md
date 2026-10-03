@@ -1,12 +1,12 @@
 # dekaru-formular
 
-Eigener Formular-Empfänger für die Kundenwebsites von dekaru. Er ersetzt Formspree für die Online-Terminanfrage in der Hosting-Stufe Plus (siehe `brain/projekte/vertrieb-partner/13-hosting-konditionen.md`, Punkt 1).
+Eigener Formular-Empfänger für die Kundenwebsites von dekaru. Er nimmt Kontaktanfragen, Terminanfragen und Tischanfragen (Gastro) an und ersetzt damit Formspree, unter anderem für die Online-Terminanfrage in der Hosting-Stufe Plus (siehe `brain/projekte/vertrieb-partner/13-hosting-konditionen.md`, Punkt 1).
 
-Stand: 29.09.2026. Lokales Repo ohne Remote. **Noch nicht bei Vercel angelegt, noch nie deployt.**
+Stand: 03.10.2026. Repo mit Remote auf GitHub. **Noch nicht bei Vercel angelegt, noch nie deployt.** Versanddienst ist entschieden: Google Workspace SMTP-Relay, siehe unten.
 
 ## Worum es geht
 
-Eine Terminanfrage auf der Website eines Betriebs soll im Postfach des Betriebs landen. Sonst nirgends. Formspree hat dafür zwei Nachteile: ein US-Dienst mehr in Anlage 3 des AVV, ohne auffindbares DPA (siehe Notizen in `dekaru-rechnungen/vorlagen/unterauftragsverarbeiter.md`), und Formspree hält Einsendungen vor. Dieser Empfänger läuft stattdessen als eine einzige Serverfunktion bei Vercel, das ohnehin Unterauftragsverarbeiter ist, und speichert nichts.
+Eine Anfrage auf der Website eines Betriebs soll im Postfach des Betriebs landen. Sonst nirgends. Formspree hat dafür zwei Nachteile: ein US-Dienst mehr in Anlage 3 des AVV, ohne auffindbares DPA (siehe Notizen in `dekaru-rechnungen/vorlagen/unterauftragsverarbeiter.md`), und Formspree hält Einsendungen vor. Dieser Empfänger läuft stattdessen als eine einzige Serverfunktion bei Vercel, das ohnehin Unterauftragsverarbeiter ist, und speichert nichts.
 
 ## Architektur
 
@@ -18,7 +18,7 @@ Vercel, Region fra1 (Frankfurt): api/anfrage.mjs
    |  prüft Herkunft, Honigtopf, Mindestzeit, Menge, Felder
    |  hält den Inhalt nur für die Dauer des Aufrufs im Arbeitsspeicher
    v
-SMTP-Versanddienst (noch zu wählen, siehe unten), TLS erzwungen
+Google Workspace SMTP-Relay (smtp-relay.gmail.com:587), STARTTLS und Anmeldung erzwungen
    |
    v
 Postfach des Betriebs (Adresse aus kunden.json)
@@ -42,7 +42,7 @@ Postfach des Betriebs (Adresse aus kunden.json)
 
 ## Datenfluss für den AVV
 
-**Welche Daten.** Was der Besucher eingibt: Name, Telefonnummer und/oder E-Mail-Adresse, Wunschtermin, Nachrichtentext. Dazu technisch: IP-Adresse und Zeitpunkt der Verbindung. Das freie Nachrichtenfeld kann Angaben nach Art. 9 DSGVO enthalten, deshalb steht am Feld „Bitte keine Gesundheitsangaben“.
+**Welche Daten.** Was der Besucher eingibt: Name, Telefonnummer und/oder E-Mail-Adresse, Nachrichtentext, je nach Art der Anfrage dazu Wunschtermin oder Zeitangabe, bei der Tischanfrage Datum, Uhrzeit und Personenzahl. Dazu technisch: IP-Adresse und Zeitpunkt der Verbindung. Das freie Nachrichtenfeld kann Angaben nach Art. 9 DSGVO enthalten, deshalb steht am Feld „Bitte keine Gesundheitsangaben“.
 
 **Wohin.** Browser, dann die Funktion bei Vercel in Frankfurt (fra1), dann der SMTP-Versanddienst, dann das Postfach des Betriebs. Keine Kopie an dekaru, kein BCC, kein Anhang. Absender der Mail ist immer die Versandadresse, die Adresse des Besuchers steht nur im Reply-To, damit der Betrieb direkt antworten kann.
 
@@ -52,7 +52,7 @@ Postfach des Betriebs (Adresse aus kunden.json)
 - Protokolliert wird nur, wenn der Versand scheitert, und dann nur `{ereignis, formular, code}`, also z. B. `versand-fehlgeschlagen`, `beispiel-tischlerei`, `EAUTH`. Die Fehlermeldung des SMTP-Servers wird bewusst verworfen, weil sie Adressen enthalten kann. Ein Test prüft das.
 - Die Mengenbegrenzung hält für höchstens zehn Minuten einen Hash der IP-Adresse im Arbeitsspeicher der Instanz. Das Salz dafür wird bei jedem Start neu gewürfelt und verlässt die Instanz nie. Die IP-Adresse selbst wird nicht gehalten.
 - **Technisch unvermeidbar:** Vercel protokolliert jeden Aufruf der Funktion mit Metadaten (Zeitpunkt, Pfad, Status, laut Anlage 3 auch IP-Adressen). Im Tarif Pro sind diese Laufzeitprotokolle einen Tag lang abrufbar (vercel.com/docs/logs/runtime, Stand 28.08.2026, zitiert nach den Notizen in `unterauftragsverarbeiter.md`). Wie lange Vercel intern aufbewahrt, nennt Vercel nicht. Alle personenbezogenen Felder stehen deshalb im Body, nie in der URL, und die Funktion gibt den Body nirgends aus.
-- **Beim Versanddienst** kann je nach Anbieter eine Kopie entstehen, siehe SMTP-Optionen. Das ist der Punkt, an dem „nichts gespeichert“ noch nicht vollständig belegt ist.
+- **Beim Versanddienst** könnte eine Kopie entstehen, wenn Google über das Relay gesendete Mails im Gesendet-Ordner des Versandkontos ablegt. Das ist noch offen und wird beim ersten Test geprüft, siehe Versanddienst. Bis dahin ist „nichts gespeichert“ an dieser Stelle nicht vollständig belegt.
 - Im Postfach des Betriebs liegt die Mail natürlich. Das ist der Zweck und liegt in der Verantwortung des Betriebs.
 
 **Ehrlich zum Ziel „kein zusätzlicher Unterauftragsverarbeiter“.** Vercel kommt nicht neu dazu. Der SMTP-Versanddienst ist aber zwingend ein Unterauftragsverarbeiter, weil er den Inhalt transportiert. Unterm Strich wird Formspree durch den Versanddienst ersetzt, es wird nicht null. Die einzige Bauweise ohne neuen Eintrag wäre Versand über das Postfach des Betriebs selbst (dessen eigener Anbieter), siehe offene Punkte.
@@ -68,27 +68,38 @@ Postfach des Betriebs (Adresse aus kunden.json)
 | Ohne JavaScript | `dauer` bleibt leer, die Anfrage gilt als zu schnell. Die Fehlerseite bittet dann um einen Anruf. Entscheidung: lieber einzelne Besucher ohne JavaScript ans Telefon schicken als Bots durchlassen. |
 | Menge | Höchstens 5 Anfragen je IP und 30 je Formular in 10 Minuten. **Wirkt bei Serverless nur begrenzt:** jede Instanz zählt für sich, eine neu gestartete beginnt bei null. Das bremst einen einzelnen Bot, keinen verteilten Angriff. Ein gemeinsamer Zähler bräuchte einen externen Speicher, also einen weiteren Dienst, und genau den wollen wir nicht. |
 | Größe | Body höchstens 16 KB. |
-| Felder | Name bis 100 Zeichen, Telefon oder Mail Pflicht, Wunschtermin Pflicht bis 100, Nachricht Pflicht bis 2000. Mailadresse genau eine, ohne Komma und Zeilenumbruch, damit Reply-To nicht manipulierbar ist. |
+| Art | Feld `art` nur `kontakt`, `termin` oder `tisch`. Fehlt es, gilt `termin`. Jeder andere Wert wird mit 400 abgewiesen. |
+| Felder | Je Art unterschiedlich, siehe Schnittstelle. Name bis 100 Zeichen, Wunschtermin bis 100, Nachricht bis 2000, Personen 1 bis 100. Mailadresse genau eine, ohne Komma und Zeilenumbruch, damit Reply-To nicht manipulierbar ist. |
 | Weiterleitung | `dankeUrl` muss auf einem der `origins` liegen, sonst lädt die Konfiguration gar nicht (keine offene Weiterleitung). |
 
 ## Schnittstelle
 
 `POST /api/anfrage`, Inhalt als `application/x-www-form-urlencoded`, `multipart/form-data` oder `application/json`.
 
-| Feld | Pflicht | Bedeutung |
-|---|---|---|
-| `formular` | ja | Formular-ID aus `kunden.json` |
-| `name` | ja | |
-| `telefon` | eins von beiden | |
-| `email` | eins von beiden | |
-| `wunschtermin` | ja | freier Text, z. B. „Dienstag vormittags“ |
-| `nachricht` | ja | |
-| `website` | muss leer sein | Honigtopf |
-| `dauer` | ja | Millisekunden seit Seitenaufruf, setzt das Skript im Formular |
+Welche Felder Pflicht sind, hängt von `art` ab:
+
+| Feld | `kontakt` | `termin` (auch ohne `art`) | `tisch` | Bedeutung |
+|---|---|---|---|---|
+| `formular` | ja | ja | ja | Formular-ID aus `kunden.json` |
+| `art` | | | | `kontakt`, `termin` oder `tisch`. Fehlt es oder ist es leer, gilt `termin`. Unbekannter Wert: 400 `art-unbekannt` |
+| `name` | ja | ja | ja | bis 100 Zeichen |
+| `telefon` | eins von beiden | eins von beiden | eins von beiden | |
+| `email` | eins von beiden | eins von beiden | eins von beiden | |
+| `wunschtermin` | freiwillig | ja | freiwillig | freier Text bis 100 Zeichen, z. B. „Dienstag vormittags“. Bei `kontakt` und `tisch` steht er als „Zeitangabe“ in der Mail |
+| `datum` | | | ja | `JJJJ-MM-TT` (Datumsfeld im Browser) oder `TT.MM.JJJJ`, muss ein echtes Kalenderdatum sein |
+| `uhrzeit` | | | ja | `HH:MM` |
+| `personen` | | | ja | ganze Zahl von 1 bis 100 |
+| `nachricht` | ja | ja | freiwillig | bis 2000 Zeichen, bei `tisch` als „Anmerkungen“ |
+| `website` | muss leer sein | muss leer sein | muss leer sein | Honigtopf |
+| `dauer` | ja | ja | ja | Millisekunden seit Seitenaufruf, setzt das Skript im Formular |
+
+`datum`, `uhrzeit` und `personen` werden nur bei `tisch` gelesen. Bei den anderen Arten landen sie nicht in der Mail.
+
+Betreff der Mail: `<betreffPraefix> Neue Kontaktanfrage von <Name>`, `... Neue Terminanfrage von <Name>` oder `... Neue Tischanfrage von <Name>, <Datum> <Uhrzeit> Uhr, <Personen> Personen`. Die erste Zeile des Mailtexts nennt dieselbe Art.
 
 Antworten:
 
-- Normales Formular: Erfolg ist `303` auf `dankeUrl`. Fehler ist eine kleine deutsche HTML-Seite mit Statuscode (400, 403, 404, 413, 422, 429, 502).
+- Normales Formular: Erfolg ist `303` auf `dankeUrl`. Fehler ist eine kleine deutsche HTML-Seite mit Statuscode (400, 403, 404, 413, 422, 429, 502). 400 steht für ein unlesbares Format, eine unbekannte `art` oder zu schnelles Absenden.
 - fetch mit `Accept: application/json` oder JSON-Body: `{ "ok": true }` oder `{ "ok": false, "fehler": "<code>", "meldung": "...", "felder": {...} }`.
 
 ## Einen neuen Kunden einrichten
@@ -99,14 +110,14 @@ Antworten:
      "name": "Friseur Mustermann",
      "empfaenger": "termine@friseur-mustermann.de",
      "origins": ["https://friseur-mustermann.de", "https://www.friseur-mustermann.de"],
-     "betreffPraefix": "[Terminanfrage]",
+     "betreffPraefix": "[Friseur Mustermann]",
      "dankeUrl": "https://friseur-mustermann.de/danke"
    }
    ```
-   Die ID nur aus Kleinbuchstaben, Ziffern und Bindestrich. `origins` genau so, wie der Browser sie schickt: mit `https://`, ohne Schrägstrich am Ende. Beide Varianten mit und ohne `www` eintragen, wenn beide erreichbar sind.
+   Die ID nur aus Kleinbuchstaben, Ziffern und Bindestrich. `origins` genau so, wie der Browser sie schickt: mit `https://`, ohne Schrägstrich am Ende. Beide Varianten mit und ohne `www` eintragen, wenn beide erreichbar sind. `betreffPraefix` steht vor dem Betreff, z. B. „[Friseur Mustermann] Neue Terminanfrage von ...“. Die Art der Anfrage ergänzt der Empfänger selbst, deshalb gehört sie nicht ins Präfix. Leer ist erlaubt.
 2. `npm run pruefe-kunden` und `npm test`.
 3. Committen. Danach deployen, **nur mit Freigabe von Michi**.
-4. In der `site.config.ts` der Kundenseite `terminanfrage` einschalten: `aktiv: true`, `endpoint` auf die URL dieses Projekts plus `/api/anfrage`, `formularId` wie in `kunden.json`, `versanddienst` mit Name und Sitz des gewählten Anbieters (erscheint in der Datenschutzerklärung).
+4. In der `site.config.ts` der Kundenseite `terminanfrage` einschalten: `aktiv: true`, `endpoint` auf die URL dieses Projekts plus `/api/anfrage`, `formularId` wie in `kunden.json`, `versanddienst` mit Name und Sitz von Google als Versanddienst (erscheint in der Datenschutzerklärung).
 5. Eine Probeanfrage von der echten Domain absenden und im Postfach des Betriebs prüfen, ob sie ankommt und ob „Antworten“ an die Adresse des Besuchers geht.
 6. AVV des Kunden: Anlage 3 muss den Versanddienst enthalten (siehe offene Punkte).
 
@@ -118,15 +129,21 @@ Nur im Vercel-Projekt eintragen (Settings, Environment Variables), nie in eine D
 
 | Name | Bedeutung |
 |---|---|
-| `FORMULAR_SMTP_HOST` | SMTP-Server des Versanddienstes |
-| `FORMULAR_SMTP_PORT` | 465 oder 587 |
-| `FORMULAR_SMTP_SECURE` | `true` bei 465, sonst `false` (dann wird STARTTLS erzwungen, unverschlüsselt geht nichts raus) |
-| `FORMULAR_SMTP_USER` | Benutzername |
-| `FORMULAR_SMTP_PASS` | Passwort oder App-Passwort |
-| `FORMULAR_SMTP_FROM` | Absenderadresse, muss zum Konto passen |
+| `FORMULAR_SMTP_HOST` | `smtp-relay.gmail.com` |
+| `FORMULAR_SMTP_PORT` | `587` |
+| `FORMULAR_SMTP_SECURE` | `false` (dann wird STARTTLS erzwungen, unverschlüsselt geht nichts raus). `true` nur bei Port 465 |
+| `FORMULAR_SMTP_USER` | vollständige Workspace-Adresse des Versandkontos |
+| `FORMULAR_SMTP_PASS` | App-Passwort dieses Kontos, nicht das normale Passwort |
+| `FORMULAR_SMTP_FROM` | Absenderadresse, eine Adresse der eigenen Workspace-Domain, passend zum Konto |
 | `FORMULAR_MINDESTZEIT_MS` | optional, Standard 3000 |
 
-Fehlt eine Pflichtvariable, antwortet der Empfänger mit 502 und protokolliert `SMTP_KONFIG_FEHLT`.
+Fehlt eine Pflichtvariable, antwortet der Empfänger mit 502 und protokolliert `SMTP_KONFIG_FEHLT`. Benutzer und Passwort sind Pflicht, ohne sie startet kein Versand.
+
+**Anmeldung und Verschlüsselung im Code** (`lib/mail.mjs`, `erstelleTransport`):
+
+- `auth` mit Benutzer und App-Passwort ist immer gesetzt, dazu `forceAuth: true`. Ohne `forceAuth` meldet sich nodemailer nur an, wenn der Server AUTH ankündigt. Mit `forceAuth` gibt es keinen Versand ohne Anmeldung, auch nicht, falls das Relay einmal per IP durchließe.
+- Bei `FORMULAR_SMTP_SECURE=false` setzt der Code `requireTLS: true`. Bietet der Server kein STARTTLS an, bricht der Versand ab, statt im Klartext zu senden. Jeder andere Wert als `true` gilt als `false`, fällt also auf erzwungenes STARTTLS zurück, nie auf Klartext.
+- Tests prüfen beides an den Optionen des Transports.
 
 ## Tests
 
@@ -135,11 +152,11 @@ npm install
 npm test
 ```
 
-`node --test` mit gemocktem Transport, es wird nie eine echte Mail verschickt. Abgedeckt: gültige Anfrage (Formular und fetch), Honigtopf, zu schnell, fehlender Zeitstempel, falsche Origin, fehlende Origin, Referer als Ersatz, unbekannte Formular-ID, Prototyp-ID, zu lange Nachricht, weder Telefon noch Mail, Header-Injection über die Mailadresse, Mengenbegrenzung, Protokoll ohne personenbezogene Daten, CORS-Vorabanfrage, GET, Prüfung von `kunden.json`, und ein Aufbau der Mail durch echtes nodemailer über `streamTransport` ohne Netz.
+`node --test` mit gemocktem Transport, es wird nie eine echte Mail verschickt. Abgedeckt: alle drei Arten mit Pflichtfeldern, Betreff und Mailtext, Rückwärtskompatibilität ohne `art`, unbekannte `art` (auch `constructor` und `__proto__`), ungültige Datums-, Uhrzeit- und Personenwerte, Längengrenzen, Honigtopf und Mindestzeit je Art, Transport mit erzwungener Anmeldung und STARTTLS, gültige Anfrage (Formular und fetch), Honigtopf, zu schnell, fehlender Zeitstempel, falsche Origin, fehlende Origin, Referer als Ersatz, unbekannte Formular-ID, Prototyp-ID, zu lange Nachricht, weder Telefon noch Mail, Header-Injection über die Mailadresse, Mengenbegrenzung, Protokoll ohne personenbezogene Daten, CORS-Vorabanfrage, GET, Prüfung von `kunden.json`, und ein Aufbau der Mail durch echtes nodemailer über `streamTransport` ohne Netz.
 
 ## Was Michi vor dem ersten Einsatz tun muss
 
-1. **SMTP-Anbieter wählen** (Optionen unten) und dort ein eigenes Versandkonto oder eine eigene Absenderadresse anlegen, nicht das Hauptpostfach. AVV mit dem Anbieter abschließen und Nachweis ablegen.
+1. **SMTP-Relay in Google Workspace einrichten**, siehe Versanddienst. Ein eigenes Versandkonto anlegen, nicht das Hauptpostfach, mit Bestätigung in zwei Schritten und App-Passwort. Im eigenen Workspace-Vertrag prüfen, dass das Cloud Data Processing Addendum gilt, und den Nachweis ablegen.
 2. **Vercel-Projekt anlegen**, im Team „MichiConsulting's projects“ (Pro), aus diesem Ordner. Dafür braucht das Repo ein Remote oder einen Upload per CLI. Beides ist Michis Entscheidung, bewusst nicht vorbereitet.
 3. **Region prüfen**: nach dem ersten Deploy in den Projekteinstellungen unter Functions nachsehen, dass `fra1` aktiv ist. `vercel.json` setzt es, aber das Dashboard ist die Bestätigung. Dabei auch prüfen, dass keine Ausweichregion (Function Failover Regions) außerhalb der EU eingestellt ist.
    Beim ersten Deploy außerdem bestätigen, dass `kunden.json` per `includeFiles` in der Funktion landet und der Export `export default { fetch }` greift: eine Probeanfrage mit unbekannter Formular-ID muss 404 liefern, nicht 500.
@@ -148,16 +165,29 @@ npm test
 6. **Probeanfrage** an ein eigenes Postfach, bevor der erste Kunde umgestellt wird.
 7. **Unterlagen anpassen**, siehe offene Punkte. Erst danach den ersten Kunden umstellen.
 
-## SMTP-Optionen
+## Versanddienst: Google Workspace SMTP-Relay
 
-Keine Entscheidung, nur die Lage. Alle Angaben abgerufen am 29.09.2026. Nichts davon ist vom Anbieter vertraglich bestätigt, bevor der jeweilige AVV tatsächlich abgeschlossen ist.
+**Entschieden am 03.10.2026.** Versendet wird über das SMTP-Relay von Google Workspace, das dekaru ohnehin nutzt (die MX-Einträge von dekaru.de zeigen auf Google, geprüft am 29.09.2026).
 
-### 1. Google Workspace (bestehendes Mailkonto von dekaru.de)
+| Einstellung | Wert |
+|---|---|
+| Server | `smtp-relay.gmail.com` |
+| Port | 587 |
+| Verschlüsselung | STARTTLS, im Code erzwungen (`requireTLS`) |
+| Anmeldung | SMTP-Authentifizierung mit Workspace-Adresse und App-Passwort, im Code erzwungen (`forceAuth`) |
+| IP-Bindung | keine |
 
-- **Warum naheliegend:** Die MX-Einträge von dekaru.de zeigen auf Google (`dig MX dekaru.de` liefert `smtp.google.com`, geprüft am 29.09.2026). Es gäbe also kein neues Konto.
-- **Zugang:** Passend ist `smtp.gmail.com`, Port 465 oder 587, mit vollständiger Workspace-Adresse und App-Passwort. Google nennt dafür ausdrücklich „Dynamic IP addresses“ und „The sending limit is 2,000 messages per day“. Der empfohlene `smtp-relay.gmail.com` „authenticates messages with IP addresses“, bei dynamischen Adressen „authentication might require a static IP address“, und feste Adressen haben Vercel-Funktionen nicht. Fundstelle: knowledge.workspace.google.com/admin/gmail/send-email-from-a-printer-scanner-or-app, Wortlaut geprüft.
-- **AVV:** Das Cloud Data Processing Addendum „is incorporated into the Agreement(s)“, gilt ausdrücklich auch für Google Workspace, Stand „Last modified June 8, 2026“. Drittlandübermittlung über Standardvertragsklauseln, die dort definiert sind. Fundstelle: cloud.google.com/terms/data-processing-addendum. Vertragspartner und Anschrift stehen nicht im Addendum, **im eigenen Workspace-Vertrag prüfen**.
-- **Haken, wichtig:** Google schreibt: „Sent messages are automatically copied to the Gmail/Sent folder if your email client uses SMTP.“ (support.google.com/mail/answer/78892, Wortlaut geprüft). Damit läge **jede Anfrage in Kopie bei dekaru**, was gegen „keine Kopie an dekaru“ und „nichts gespeichert“ verstößt. Ginge nur mit einem eigenen Versandkonto, dessen Gesendet-Ordner regelmäßig automatisch geleert wird, und das ist erst noch zu belegen. Dazu ist Google ein US-Konzern, auch wenn der Vertrag über eine EU-Gesellschaft läuft.
+**Warum ohne IP-Bindung.** Das Relay kann Absender über ihre IP-Adresse zulassen. Vercel-Funktionen haben aber keine festen IP-Adressen, eine IP-Freigabe wäre also entweder unmöglich oder müsste so weit sein, dass sie nichts mehr schützt. Deshalb läuft die Zulassung ausschließlich über die SMTP-Anmeldung. In der Relay-Einstellung der Admin-Konsole heißt das: SMTP-Authentifizierung verlangen, TLS verlangen, keine Beschränkung auf bestimmte IP-Adressen, als Absender nur Adressen der eigenen Domains.
+
+**AVV.** Das Cloud Data Processing Addendum „is incorporated into the Agreement(s)“ und gilt ausdrücklich auch für Google Workspace, Stand „Last modified June 8, 2026“. Drittlandübermittlung über Standardvertragsklauseln. Fundstelle: cloud.google.com/terms/data-processing-addendum, Wortlaut am 29.09.2026 geprüft. Vertragspartner und Anschrift stehen nicht im Addendum, **im eigenen Workspace-Vertrag prüfen**. Google ist ein US-Konzern, auch wenn der Vertrag über eine EU-Gesellschaft läuft.
+
+**Offen: Gesendet-Ordner.** Für `smtp.gmail.com` schreibt Google: „Sent messages are automatically copied to the Gmail/Sent folder if your email client uses SMTP.“ (support.google.com/mail/answer/78892, Wortlaut am 29.09.2026 geprüft). Ob das auch für Mails über `smtp-relay.gmail.com` gilt, ist **nicht belegt**. Prüfung beim ersten Test: Probeanfrage senden, danach im Gesendet-Ordner des Versandkontos nachsehen. Liegt dort eine Kopie, liegt jede Anfrage bei dekaru, und es braucht eine Lösung (z. B. automatisches Löschen im Versandkonto), bevor der erste Kunde umgestellt wird.
+
+Zur Einordnung: Bis zum 29.09.2026 stand hier `smtp.gmail.com` als passender Zugang, weil Google beim Relay die Authentifizierung über IP-Adressen beschreibt. Das Relay lässt aber auch SMTP-Authentifizierung zu, und damit fällt die IP-Frage weg.
+
+## Geprüfte Alternativen (nicht gewählt)
+
+Stand 29.09.2026, nur zur Nachvollziehbarkeit.
 
 ### 2. mailbox.org
 
@@ -178,7 +208,7 @@ Keine Entscheidung, nur die Lage. Alle Angaben abgerufen am 29.09.2026. Nichts d
 
 ## Offene Punkte
 
-1. **SMTP-Anbieter entscheiden** und bei der Wahl klären, ob er gesendete Mails speichert (Gesendet-Ordner, Versandprotokolle mit Inhalt). Erst danach stimmt der Satz „nichts gespeichert“ ganz.
+1. **Gesendet-Ordner beim Relay prüfen.** Der Versanddienst ist entschieden (Google Workspace SMTP-Relay). Offen ist nur, ob über das Relay gesendete Mails im Gesendet-Ordner des Versandkontos landen. Wird bei der ersten Probeanfrage geprüft. Erst danach stimmt der Satz „nichts gespeichert“ ganz.
 2. **Versand über das Postfach des Betriebs** als Alternative prüfen: je Kunde eigene SMTP-Zugangsdaten, dann läuft die Mail über den Anbieter, den der Betrieb ohnehin hat, und bei dekaru kommt kein Unterauftragsverarbeiter dazu. Kostet: Zugangsdaten je Kunde als Umgebungsvariablen, Pflege bei Passwortwechsel. Bewusst nicht gebaut.
 3. **Unterlagen, die mit dem Einsatz veralten** (nur hier notiert, nicht geändert):
    - `dekaru-rechnungen/vorlagen/tom.md`, Abschnitt 1: „als statische Seiten ohne Datenbank“. Ohne Datenbank bleibt wahr, aber es kommt eine Serverfunktion dazu.
