@@ -6,7 +6,7 @@
       "https://tischlerei-beispiel.example",
       "https://www.tischlerei-beispiel.example"
     ],
-    "betreffPraefix": "[Terminanfrage]",
+    "betreffPraefix": "[Tischlerei Beispiel]",
     "dankeUrl": "https://tischlerei-beispiel.example/danke"
   }
 }

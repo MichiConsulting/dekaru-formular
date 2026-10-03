@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Formular-Empfaenger fuer dekaru-Kundenwebsites. Nimmt Terminanfragen an und leitet sie per Mail an das Postfach des Betriebs weiter, ohne etwas zu speichern.",
+  "description": "Formular-Empfaenger fuer dekaru-Kundenwebsites. Nimmt Kontakt-, Termin- und Tischanfragen an und leitet sie per Mail an das Postfach des Betriebs weiter, ohne etwas zu speichern.",
   "engines": {
     "node": "24.x"
   },
