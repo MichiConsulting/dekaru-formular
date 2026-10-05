@@ -52,7 +52,7 @@ Postfach des Betriebs (Adresse aus kunden.json)
 - Protokolliert wird nur, wenn der Versand scheitert, und dann nur `{ereignis, formular, code}`, also z. B. `versand-fehlgeschlagen`, `beispiel-tischlerei`, `EAUTH`. Die Fehlermeldung des SMTP-Servers wird bewusst verworfen, weil sie Adressen enthalten kann. Ein Test prüft das.
 - Die Mengenbegrenzung hält für höchstens zehn Minuten einen Hash der IP-Adresse im Arbeitsspeicher der Instanz. Das Salz dafür wird bei jedem Start neu gewürfelt und verlässt die Instanz nie. Die IP-Adresse selbst wird nicht gehalten.
 - **Technisch unvermeidbar:** Vercel protokolliert jeden Aufruf der Funktion mit Metadaten (Zeitpunkt, Pfad, Status, laut Anlage 3 auch IP-Adressen). Im Tarif Pro sind diese Laufzeitprotokolle einen Tag lang abrufbar (vercel.com/docs/logs/runtime, Stand 28.08.2026, zitiert nach den Notizen in `unterauftragsverarbeiter.md`). Wie lange Vercel intern aufbewahrt, nennt Vercel nicht. Alle personenbezogenen Felder stehen deshalb im Body, nie in der URL, und die Funktion gibt den Body nirgends aus.
-- **Beim Versanddienst** könnte eine Kopie entstehen, wenn Google über das Relay gesendete Mails im Gesendet-Ordner des Versandkontos ablegt. Das ist noch offen und wird beim ersten Test geprüft, siehe Versanddienst. Bis dahin ist „nichts gespeichert“ an dieser Stelle nicht vollständig belegt.
+- **Beim Versanddienst** entsteht keine Kopie. Geprüft am 05.10.2026: Geht eine Anfrage an eine andere Adresse als das Versandkonto info@dekaru.de, legt Google über das Relay keine Kopie im Gesendet-Ordner an. Nur Mails an info@dekaru.de selbst erscheinen dort. Als Sicherheitsnetz löscht `werkzeuge/gesendet-aufraeumen.gs` (Google Apps Script in info@dekaru.de, stündlich) solche Kopien endgültig.
 - Im Postfach des Betriebs liegt die Mail natürlich. Das ist der Zweck und liegt in der Verantwortung des Betriebs.
 
 **Ehrlich zum Ziel „kein zusätzlicher Unterauftragsverarbeiter“.** Vercel kommt nicht neu dazu. Der SMTP-Versanddienst ist aber zwingend ein Unterauftragsverarbeiter, weil er den Inhalt transportiert. Unterm Strich wird Formspree durch den Versanddienst ersetzt, es wird nicht null. Die einzige Bauweise ohne neuen Eintrag wäre Versand über das Postfach des Betriebs selbst (dessen eigener Anbieter), siehe offene Punkte.
@@ -181,7 +181,7 @@ npm test
 
 **AVV.** Das Cloud Data Processing Addendum „is incorporated into the Agreement(s)“ und gilt ausdrücklich auch für Google Workspace, Stand „Last modified June 8, 2026“. Drittlandübermittlung über Standardvertragsklauseln. Fundstelle: cloud.google.com/terms/data-processing-addendum. Vertragspartner und Anschrift stehen nicht im Addendum, **im eigenen Workspace-Vertrag prüfen**. Google ist ein US-Konzern, auch wenn der Vertrag über eine EU-Gesellschaft läuft.
 
-**Offen: Gesendet-Ordner.** Für `smtp.gmail.com` schreibt Google: „Sent messages are automatically copied to the Gmail/Sent folder if your email client uses SMTP.“ (support.google.com/mail/answer/78892, Wortlaut am 29.09.2026 geprüft). Ob das auch für Mails über `smtp-relay.gmail.com` gilt, ist **nicht belegt**. Prüfung beim ersten Test: Probeanfrage senden, danach im Gesendet-Ordner des Versandkontos nachsehen. Liegt dort eine Kopie, liegt jede Anfrage bei dekaru, und es braucht eine Lösung (z. B. automatisches Löschen im Versandkonto), bevor der erste Kunde umgestellt wird.
+**Gesendet-Ordner, geklärt am 05.10.2026.** Zwei Probeanfragen über das Relay: an info@dekaru.de (gleich dem Versandkonto) entstand eine Kopie in Gesendet, an michael.henning@dekaru.de (anderes Postfach) keine. Bei Kundenanfragen geht die Mail immer an den Betrieb, also entsteht keine Kopie. Das Skript `werkzeuge/gesendet-aufraeumen.gs` läuft trotzdem stündlich als Sicherheitsnetz.
 
 Zur Einordnung: Bis zum 29.09.2026 stand hier `smtp.gmail.com` als passender Zugang, weil Google beim Relay die Authentifizierung über IP-Adressen beschreibt. Das Relay lässt aber auch SMTP-Authentifizierung zu, und damit fällt die IP-Frage weg.
 
@@ -208,7 +208,7 @@ Stand 29.09.2026, nur zur Nachvollziehbarkeit.
 
 ## Offene Punkte
 
-1. **Gesendet-Ordner beim Relay prüfen.** Der Versanddienst ist entschieden (Google Workspace SMTP-Relay). Offen ist nur, ob über das Relay gesendete Mails im Gesendet-Ordner des Versandkontos landen. Wird bei der ersten Probeanfrage geprüft. Erst danach stimmt der Satz „nichts gespeichert“ ganz.
+1. **Gesendet-Ordner beim Relay:** erledigt am 05.10.2026, keine Kopie bei Anfragen an andere Adressen, Lösch-Skript als Sicherheitsnetz eingerichtet.
 2. **Versand über das Postfach des Betriebs** als Alternative prüfen: je Kunde eigene SMTP-Zugangsdaten, dann läuft die Mail über den Anbieter, den der Betrieb ohnehin hat, und bei dekaru kommt kein Unterauftragsverarbeiter dazu. Kostet: Zugangsdaten je Kunde als Umgebungsvariablen, Pflege bei Passwortwechsel. Bewusst nicht gebaut.
 3. **Unterlagen, die mit dem Einsatz veralten** (nur hier notiert, nicht geändert):
    - `dekaru-rechnungen/vorlagen/tom.md`, Abschnitt 1: „als statische Seiten ohne Datenbank“. Ohne Datenbank bleibt wahr, aber es kommt eine Serverfunktion dazu.
