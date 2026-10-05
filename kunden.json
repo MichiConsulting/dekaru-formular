@@ -8,15 +8,5 @@
     ],
     "betreffPraefix": "[Tischlerei Beispiel]",
     "dankeUrl": "https://tischlerei-beispiel.example/danke"
-  },
-  "dekaru-test": {
-    "name": "dekaru Probeanfrage (vorübergehend)",
-    "empfaenger": "info@dekaru.de",
-    "origins": [
-      "https://www.dekaru.de",
-      "https://dekaru.de"
-    ],
-    "betreffPraefix": "[Test dekaru]",
-    "dankeUrl": "https://www.dekaru.de/"
   }
 }
