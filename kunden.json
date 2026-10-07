@@ -12,7 +12,9 @@
   "werkbank-meldung": {
     "name": "dekaru Werkbank, Meldungen an dekaru",
     "empfaenger": "info@dekaru.de",
-    "origins": [],
+    "origins": [
+      "https://werkbank.dekaru.de"
+    ],
     "arten": [
       "werkbank"
     ],
