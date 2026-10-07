@@ -2,6 +2,8 @@
 
 Eigener Formular-Empfänger für die Kundenwebsites von dekaru. Er nimmt Kontaktanfragen, Terminanfragen und Tischanfragen (Gastro) an und ersetzt damit Formspree, unter anderem für die Online-Terminanfrage in der Hosting-Stufe Plus (siehe `brain/projekte/vertrieb-partner/13-hosting-konditionen.md`, Punkt 1).
 
+Dazu kommen seit 07.10.2026 **Meldungen aus der dekaru Werkbank** (Fehler, Vorschläge, Fragen), die an dekaru selbst gehen. Siehe Abschnitt „Werkbank-Meldungen“.
+
 Stand: 03.10.2026. Repo mit Remote auf GitHub. **Noch nicht bei Vercel angelegt, noch nie deployt.** Versanddienst ist entschieden: Google Workspace SMTP-Relay, siehe unten.
 
 ## Worum es geht
@@ -44,7 +46,7 @@ Postfach des Betriebs (Adresse aus kunden.json)
 
 **Welche Daten.** Was der Besucher eingibt: Name, Telefonnummer und/oder E-Mail-Adresse, Nachrichtentext, je nach Art der Anfrage dazu Wunschtermin oder Zeitangabe, bei der Tischanfrage Datum, Uhrzeit und Personenzahl. Dazu technisch: IP-Adresse und Zeitpunkt der Verbindung. Das freie Nachrichtenfeld kann Angaben nach Art. 9 DSGVO enthalten, deshalb steht am Feld „Bitte keine Gesundheitsangaben“.
 
-**Wohin.** Browser, dann die Funktion bei Vercel in Frankfurt (fra1), dann der SMTP-Versanddienst, dann das Postfach des Betriebs. Keine Kopie an dekaru, kein BCC, kein Anhang. Absender der Mail ist immer die Versandadresse, die Adresse des Besuchers steht nur im Reply-To, damit der Betrieb direkt antworten kann.
+**Wohin.** Browser, dann die Funktion bei Vercel in Frankfurt (fra1), dann der SMTP-Versanddienst, dann das Postfach des Betriebs. Keine Kopie an dekaru, kein BCC, kein Anhang. (Werkbank-Meldungen sind davon getrennt, sie richten sich an dekaru selbst, siehe unten.) Absender der Mail ist immer die Versandadresse, die Adresse des Besuchers steht nur im Reply-To, damit der Betrieb direkt antworten kann.
 
 **Was gespeichert wird.** Vom Empfänger selbst nichts. Keine Datenbank, keine Datei, kein Protokoll mit Inhalten. Im Einzelnen:
 
@@ -68,7 +70,7 @@ Postfach des Betriebs (Adresse aus kunden.json)
 | Ohne JavaScript | `dauer` bleibt leer, die Anfrage gilt als zu schnell. Die Fehlerseite bittet dann um einen Anruf. Entscheidung: lieber einzelne Besucher ohne JavaScript ans Telefon schicken als Bots durchlassen. |
 | Menge | Höchstens 5 Anfragen je IP und 30 je Formular in 10 Minuten. **Wirkt bei Serverless nur begrenzt:** jede Instanz zählt für sich, eine neu gestartete beginnt bei null. Das bremst einen einzelnen Bot, keinen verteilten Angriff. Ein gemeinsamer Zähler bräuchte einen externen Speicher, also einen weiteren Dienst, und genau den wollen wir nicht. |
 | Größe | Body höchstens 16 KB. |
-| Art | Feld `art` nur `kontakt`, `termin` oder `tisch`. Fehlt es, gilt `termin`. Jeder andere Wert wird mit 400 abgewiesen. |
+| Art | Feld `art` nur `kontakt`, `termin`, `tisch` oder `werkbank`, und nur, wenn das Formular die Art in `arten` erlaubt (ohne Angabe die ersten drei). Fehlt es, gilt `termin`. Jeder andere Wert wird mit 400 abgewiesen. `werkbank` steht in `arten` immer allein, ein Kundenformular kann also nie eine Werkbank-Meldung schicken und umgekehrt. |
 | Felder | Je Art unterschiedlich, siehe Schnittstelle. Name bis 100 Zeichen, Wunschtermin bis 100, Nachricht bis 2000, Personen 1 bis 100. Mailadresse genau eine, ohne Komma und Zeilenumbruch, damit Reply-To nicht manipulierbar ist. |
 | Weiterleitung | `dankeUrl` muss auf einem der `origins` liegen, sonst lädt die Konfiguration gar nicht (keine offene Weiterleitung). |
 
@@ -101,6 +103,44 @@ Antworten:
 
 - Normales Formular: Erfolg ist `303` auf `dankeUrl`. Fehler ist eine kleine deutsche HTML-Seite mit Statuscode (400, 403, 404, 413, 422, 429, 502). 400 steht für ein unlesbares Format, eine unbekannte `art` oder zu schnelles Absenden.
 - fetch mit `Accept: application/json` oder JSON-Body: `{ "ok": true }` oder `{ "ok": false, "fehler": "<code>", "meldung": "...", "felder": {...} }`.
+
+## Werkbank-Meldungen
+
+Der Feedback-Knopf der dekaru Werkbank (`dekaru-werkbank/app`, Abschnitt „Feedback an dekaru“ im README dort) schickt Meldungen per `fetch` als JSON an denselben Endpunkt. Eintrag in `kunden.json`:
+
+```json
+"werkbank-meldung": {
+  "name": "dekaru Werkbank, Meldungen an dekaru",
+  "empfaenger": "info@dekaru.de",
+  "origins": [],
+  "arten": ["werkbank"],
+  "betreffPraefix": "Werkbank-Meldung:"
+}
+```
+
+- **`origins` ist absichtlich leer**, solange die Adresse der Werkbank nicht feststeht (eine gemeinsame oder eine je Betrieb, offener Punkt im Werkbank-README). Leer heißt: jede Meldung scheitert an der Herkunft (403), es geht nichts durch. Leer ist nur bei Einträgen mit `arten: ["werkbank"]` erlaubt. Sobald die Adresse feststeht, hier eintragen, z. B. `["https://werkbank.dekaru.de"]`, bei Adressen je Betrieb jede einzeln. `localhost` und die Vorführung kommen nie hinein: Die Prüfung erlaubt nur https, und die Vorführung sendet ohnehin nicht.
+- **Keine `dankeUrl`.** Die Werkbank liest die JSON-Antwort. Ohne Danke-Seite antwortet der Empfänger auch auf einen klassischen Formular-Post mit JSON statt Weiterleitung.
+- Schutz wie bei allen Formularen: Herkunft, CORS, Honigtopf `website`, Mindestzeit `dauer` (die Werkbank misst ab dem Öffnen des Dialogs), Mengenbegrenzung, 16 KB.
+
+Felder bei `art: "werkbank"`:
+
+| Feld | Pflicht | Bedeutung |
+|---|---|---|
+| `formular` | ja | `werkbank-meldung` |
+| `meldungsart` | ja | `fehler`, `vorschlag` oder `frage` |
+| `meldungId` | ja | Kennung der Meldung aus der Werkbank, 4 bis 40 Zeichen aus Buchstaben, Ziffern, Bindestrich. Damit erkennt `/werkbank-meldung` doppelt angekommene Meldungen |
+| `modul` | nein | Modul-Kennung wie `angebots-assistent`, leer heißt allgemein |
+| `nachricht` | ja | Beschreibung, bis 2000 Zeichen |
+| `name` | nein | Name des Betriebs, nur wenn der Inhaber eine Antwort möchte |
+| `email` | nein | Adresse für die Antwort, wird Reply-To |
+| `kontext` | nein | technischer Kontext als Text bis 2000 Zeichen (App-Version, Modul, Ansicht, Browser, letzte Fehlermeldungen), nur wenn der Inhaber das Häkchen gesetzt lässt |
+| `website`, `dauer` | wie oben | Honigtopf und Mindestzeit |
+
+Betreff: `Werkbank-Meldung: <Art> <Modul> (<Meldungs-ID>)`, z. B. `Werkbank-Meldung: Fehler angebots-assistent (r1a2b3c4)`. Der Mailtext ist fest gegliedert, damit der Befehl `/werkbank-meldung` in Claude Code ihn lesen kann: erste Zeile `WERKBANK-MELDUNG`, dann Zeilen `Meldungs-ID:`, `Art:`, `Modul:`, `Betrieb:`, `Antwort an:`, `Eingegangen:`, `Herkunft:`, dann die Beschreibung zwischen `--- Beschreibung ---` und `--- Ende Beschreibung ---`, der Kontext zwischen `--- Technischer Kontext ---` und `--- Ende Kontext ---`. Wer das in `lib/mail.mjs` ändert, passt `~/dekaru/.claude/commands/werkbank-meldung.md` mit an.
+
+**Datenschutz.** Bei Werkbank-Meldungen ist dekaru nicht Auftragsverarbeiter des Betriebs, sondern selbst Verantwortlicher: Der Inhaber schickt dekaru bewusst eine Meldung zum eigenen Produkt. Die Werkbank zeigt vor dem Senden genau, was mitgeht, und schickt nie Betriebsdaten (keine Kunden, Angebote, Karten, Schlüssel, PIN). Der Empfänger speichert auch hier nichts. Die Mail liegt danach im Postfach info@dekaru.de.
+
+**Gesendet-Ordner.** Werkbank-Meldungen gehen an info@dekaru.de, also an das Versandkonto selbst. Dabei entsteht laut der Prüfung vom 05.10.2026 eine Kopie in Gesendet. `werkzeuge/gesendet-aufraeumen.gs` fasst sie nicht an (anderer Betreff), sie bleibt also neben der Mail im Posteingang liegen. Beim ersten echten Test prüfen, dass die Meldung wirklich im **Posteingang** ankommt und nicht nur in Gesendet.
 
 ## Einen neuen Kunden einrichten
 
@@ -145,14 +185,14 @@ Fehlt eine Pflichtvariable, antwortet der Empfänger mit 502 und protokolliert `
 - Bei `FORMULAR_SMTP_SECURE=false` setzt der Code `requireTLS: true`. Bietet der Server kein STARTTLS an, bricht der Versand ab, statt im Klartext zu senden. Jeder andere Wert als `true` gilt als `false`, fällt also auf erzwungenes STARTTLS zurück, nie auf Klartext.
 - Tests prüfen beides an den Optionen des Transports.
 
-## Tests
+## Tests (Stand 07.10.2026: 51)
 
 ```
 npm install
 npm test
 ```
 
-`node --test` mit gemocktem Transport, es wird nie eine echte Mail verschickt. Abgedeckt: alle drei Arten mit Pflichtfeldern, Betreff und Mailtext, Rückwärtskompatibilität ohne `art`, unbekannte `art` (auch `constructor` und `__proto__`), ungültige Datums-, Uhrzeit- und Personenwerte, Längengrenzen, Honigtopf und Mindestzeit je Art, Transport mit erzwungener Anmeldung und STARTTLS, gültige Anfrage (Formular und fetch), Honigtopf, zu schnell, fehlender Zeitstempel, falsche Origin, fehlende Origin, Referer als Ersatz, unbekannte Formular-ID, Prototyp-ID, zu lange Nachricht, weder Telefon noch Mail, Header-Injection über die Mailadresse, Mengenbegrenzung, Protokoll ohne personenbezogene Daten, CORS-Vorabanfrage, GET, Prüfung von `kunden.json`, und ein Aufbau der Mail durch echtes nodemailer über `streamTransport` ohne Netz.
+`node --test` mit gemocktem Transport, es wird nie eine echte Mail verschickt. Abgedeckt: alle drei Arten mit Pflichtfeldern, Betreff und Mailtext, Rückwärtskompatibilität ohne `art`, unbekannte `art` (auch `constructor` und `__proto__`), ungültige Datums-, Uhrzeit- und Personenwerte, Längengrenzen, Honigtopf und Mindestzeit je Art, Transport mit erzwungener Anmeldung und STARTTLS, gültige Anfrage (Formular und fetch), Honigtopf, zu schnell, fehlender Zeitstempel, falsche Origin, fehlende Origin, Referer als Ersatz, unbekannte Formular-ID, Prototyp-ID, zu lange Nachricht, weder Telefon noch Mail, Header-Injection über die Mailadresse, Mengenbegrenzung, Protokoll ohne personenbezogene Daten, CORS-Vorabanfrage, GET, Prüfung von `kunden.json`, und ein Aufbau der Mail durch echtes nodemailer über `streamTransport` ohne Netz. Für Werkbank-Meldungen (`test/werkbank.test.mjs`): Versand an dekaru mit festem Betreff und gegliedertem Text, ohne Kontakt und Kontext, CORS-Vorabanfrage, Trennung der Arten in beide Richtungen, Herkunft, Feldprüfung, Honigtopf, Mindestzeit und Menge, Formular-Post ohne Danke-Seite, Konfiguration mit leeren Origins und die echte `kunden.json`.
 
 ## Was Michi vor dem ersten Einsatz tun muss
 
@@ -207,6 +247,8 @@ Stand 29.09.2026, nur zur Nachvollziehbarkeit.
 - Vorteil: für Versand aus Anwendungen gebaut, gute Zustellbarkeit. Nachteil: eigener neuer Anbieter mit US-Kette dahinter.
 
 ## Offene Punkte
+
+0. **Werkbank-Meldungen:** Adresse der Werkbank in `origins` von `werkbank-meldung` eintragen, sobald sie feststeht, dann deployen (nur mit Freigabe). Bis dahin nimmt der Eintrag nichts an.
 
 1. **Gesendet-Ordner beim Relay:** erledigt am 05.10.2026, keine Kopie bei Anfragen an andere Adressen, Lösch-Skript als Sicherheitsnetz eingerichtet.
 2. **Versand über das Postfach des Betriebs** als Alternative prüfen: je Kunde eigene SMTP-Zugangsdaten, dann läuft die Mail über den Anbieter, den der Betrieb ohnehin hat, und bei dekaru kommt kein Unterauftragsverarbeiter dazu. Kostet: Zugangsdaten je Kunde als Umgebungsvariablen, Pflege bei Passwortwechsel. Bewusst nicht gebaut.
