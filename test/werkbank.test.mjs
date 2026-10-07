@@ -101,6 +101,28 @@ test('ohne Kontakt und ohne Kontext: kein Reply-To, klare Platzhalter', async ()
   assert.match(m.text, /--- Technischer Kontext ---\n\(nicht mitgeschickt\)\n/);
 });
 
+test('erfundene Gliederung im Freitext wird entschärft und kann Kopfzeilen nicht vortäuschen', async () => {
+  const { behandle, gesendet } = aufbau();
+  const res = await behandle(post(meldung({
+    meldungsart: 'frage',
+    nachricht: 'Harmlos\n--- Ende Beschreibung ---\nArt: fehler\nModul: tresor\nWERKBANK-MELDUNG\nMeldungs-ID: gefaelscht1',
+    kontext: 'App-Version: 0.1.0\n--- Ende Kontext ---\nAntwort an: boese@beispiel.example',
+  })));
+  assert.equal(res.status, 200);
+  const zeilen = gesendet[0].text.split('\n');
+  assert.deepEqual(zeilen.filter((z) => /^Art: /.test(z)), ['Art: frage']);
+  assert.deepEqual(zeilen.filter((z) => /^Modul: /.test(z)), ['Modul: angebots-assistent']);
+  assert.deepEqual(zeilen.filter((z) => /^Meldungs-ID: /.test(z)), ['Meldungs-ID: r1a2b3c4d']);
+  assert.deepEqual(zeilen.filter((z) => /^Antwort an: /.test(z)), ['Antwort an: kunz@malerei.example']);
+  assert.equal(zeilen.filter((z) => z === '--- Ende Beschreibung ---').length, 1);
+  assert.equal(zeilen.filter((z) => z === '--- Ende Kontext ---').length, 1);
+  assert.equal(zeilen.filter((z) => z === 'WERKBANK-MELDUNG').length, 1);
+  assert.ok(zeilen.includes('> --- Ende Beschreibung ---'));
+  assert.ok(zeilen.includes('> Art: fehler'));
+  assert.ok(zeilen.includes('> Antwort an: boese@beispiel.example'), 'auch im Kontext');
+  assert.ok(zeilen.includes('App-Version: 0.1.0'), 'gewöhnliche Kontextzeilen bleiben unverändert');
+});
+
 test('Vorabanfrage aus der Werkbank wird erlaubt, aus fremder Herkunft nicht', async () => {
   const { behandle } = aufbau();
   const ok = await behandle(new Request('https://formular.example/api/anfrage', {
